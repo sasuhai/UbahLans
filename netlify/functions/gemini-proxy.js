@@ -90,10 +90,14 @@ exports.handler = async (event, context) => {
 
     } catch (error) {
         console.error('Function error:', error);
+        console.error('Error stack:', error.stack);
         return {
             statusCode: 500,
             headers,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({
+                error: error.message || 'Unknown error occurred',
+                details: error.toString()
+            })
         };
     }
 };

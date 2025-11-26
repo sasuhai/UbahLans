@@ -327,7 +327,9 @@ async function callGeminiAPI(prompt, imageData, model = null) {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(`API Error: ${errorData.error?.message || response.statusText}`);
+            console.error('Netlify Function error response:', errorData);
+            const errorMsg = errorData.error || errorData.details || errorData.message || response.statusText;
+            throw new Error(`API Error: ${errorMsg}`);
         }
 
         const data = await response.json();
