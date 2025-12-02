@@ -1536,17 +1536,23 @@ async function generateTransformation() {
         console.error('Generation error:', error);
 
         // Provide user-friendly error messages
-        let errorMessage = 'Failed to generate transformation.\n\n';
+        let errorTitle = 'Generation Error';
+        let errorMessage = '';
 
-        if (error.message.includes('quota') || error.message.includes('exceeded')) {
-            errorMessage += '⚠️ API Quota Exceeded\n\nThe Gemini API has reached its usage limit. This happens when:\n• Too many requests in a short time\n• Daily/monthly quota is reached\n\nSolutions:\n1. Wait 1-2 hours and try again\n2. Use a different API key\n3. Check your Google Cloud Console for quota limits\n\nNote: The free tier has limited requests per minute.';
+        if (error.message.includes('overloaded') || error.message.includes('503')) {
+            errorTitle = 'Model Temporarily Unavailable';
+            errorMessage = 'The AI model is currently overloaded due to high demand.\n\nThis is temporary and usually resolves within a few minutes.\n\nSuggestions:\n• Wait 2-5 minutes and try again\n• Try during off-peak hours\n• The model will work once server load decreases\n\nYour image and settings are saved - just click "Generate" again when ready.';
+        } else if (error.message.includes('quota') || error.message.includes('exceeded')) {
+            errorTitle = 'API Quota Exceeded';
+            errorMessage = 'The Gemini API has reached its usage limit.\n\nThis happens when:\n• Too many requests in a short time\n• Daily/monthly quota is reached\n\nSolutions:\n1. Wait 1-2 hours and try again\n2. Use a different API key\n3. Check your Google Cloud Console for quota limits\n\nNote: The free tier has limited requests per minute.';
         } else if (error.message.includes('API Error')) {
-            errorMessage += `API Error: ${error.message}\n\nPlease check:\n• Your internet connection\n• API key is valid\n• Try again in a few moments`;
+            errorTitle = 'API Error';
+            errorMessage = `${error.message}\n\nPlease check:\n• Your internet connection\n• API key is valid\n• Try again in a few moments`;
         } else {
-            errorMessage += error.message;
+            errorMessage = error.message;
         }
 
-        showErrorModal('Generation Error', errorMessage);
+        showErrorModal(errorTitle, errorMessage);
         elements.loadingSection.style.display = 'none';
         elements.optionsSection.style.display = 'flex';
     }
