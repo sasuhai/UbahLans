@@ -630,7 +630,7 @@ async function generateInfographic() {
         both: 'Label all plants and trees bilingually. Format each label with the English name in regular font on the first line, and the Bahasa Malaysia name in smaller italic font in parentheses on the second line.'
     };
 
-    const prompt = `Transform this garden/landscape photo into a simplified illustrated infographic with plant labels.
+    const prompt = `Generate an image. Transform this garden/landscape photo into a simplified illustrated infographic with plant labels.
 
 ${languageInstructions[language]}
 
@@ -660,7 +660,7 @@ COLOR PALETTE:
 - Trees: Natural browns and muted greens
 - Overall: Calm, natural, professional landscape illustration aesthetic
 
-The final result should look like a professional landscape plan illustration with a calm, natural color palette and all plants clearly labeled with white boxes and arrows.`;
+CRITICAL: You must generate an image. Do not provide a text description. The output must be the transformed image.`;
 
     console.log('📝 Generating illustrated infographic with language:', language);
     console.log('🖼️ Image data length:', state.uploadedImageData?.length);
