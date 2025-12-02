@@ -1319,8 +1319,8 @@ async function generateInventoryList(transformationDescription, transformedImage
         
         If there are numbered hardscape features, list them as well, but prioritize the plants.`;
 
-        // Use the multimodal API
-        result = await callGeminiAPI(prompt, transformedImageUrl);
+        // Use the multimodal API with the text model (not image model)
+        result = await callGeminiAPI(prompt, transformedImageUrl, CONFIG.DEFAULT_MODEL);
     } else {
         // Fallback: Text-only generation
         prompt = `Based on this landscape transformation description: "${transformationDescription}", 
