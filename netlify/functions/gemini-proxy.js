@@ -23,18 +23,47 @@ exports.handler = async (event, context) => {
     }
 
     try {
-        const { model, prompt, imageData, generationConfig } = JSON.parse(event.body);
+        let { model, prompt, imageData, generationConfig } = JSON.parse(event.body);
 
         // Get API key from environment variable
-        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        // Check both naming conventions (GEMINI_API_KEY and gemini-api-key)
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env['gemini-api-key'];
+
+        console.log('Environment variables available:', Object.keys(process.env).filter(k => k.toLowerCase().includes('gemini')));
+        console.log('API Key found:', !!GEMINI_API_KEY);
+        console.log('Requested model:', model);
+        console.log('Has image data:', !!imageData);
+        console.log('Prompt length:', prompt?.length);
 
         if (!GEMINI_API_KEY) {
             return {
                 statusCode: 500,
                 headers,
-                body: JSON.stringify({ error: 'API key not configured' })
+                body: JSON.stringify({
+                    error: 'API key not configured',
+                    hint: 'Please set GEMINI_API_KEY environment variable in Netlify'
+                })
             };
         }
+
+        // CRITICAL FIX: If image data is present and model doesn't support image generation,
+        // automatically switch to a model that does
+        const imageGenerationModels = [
+            'gemini-3-pro-image-preview',
+            'imagen-3.0-generate-001',
+            'gemini-2.0-flash-preview-image-generation'
+        ];
+
+        // Check if the requested model supports image generation
+        const isImageGenerationModel = imageGenerationModels.some(m => model?.includes(m));
+
+        if (imageData && !isImageGenerationModel) {
+            console.warn(`⚠️ Model ${model} does NOT support image generation!`);
+            console.warn(`🔄 Switching to: gemini-2.0-flash-preview-image-generation`);
+            model = 'gemini-2.0-flash-preview-image-generation';
+        }
+
+        console.log('Final model to use:', model);
 
         // Build request body
         const requestBody = {
@@ -67,9 +96,17 @@ exports.handler = async (event, context) => {
             }
         }
 
+        console.log('Request body structure:');
+        console.log('- Contents parts count:', requestBody.contents[0].parts.length);
+        console.log('- Has text part:', requestBody.contents[0].parts.some(p => p.text));
+        console.log('- Has inline_data part:', requestBody.contents[0].parts.some(p => p.inline_data));
+        console.log('- Generation config:', JSON.stringify(requestBody.generationConfig));
+
         // Call Gemini API
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        console.log('Calling API URL:', apiUrl);
+
+        const response = await fetch(apiUrl,
             {
                 method: 'POST',
                 headers: {
@@ -81,6 +118,44 @@ exports.handler = async (event, context) => {
         );
 
         const data = await response.json();
+
+        // Log the response for debugging
+        console.log('Gemini API Response Status:', response.status);
+        console.log('Response OK:', response.ok);
+
+        // Check if we have candidates
+        if (data.candidates && data.candidates[0]) {
+            console.log('✅ Response has candidates');
+            console.log('Finish reason:', data.candidates[0].finishReason);
+
+            if (data.candidates[0].content && data.candidates[0].content.parts) {
+                console.log('Parts count:', data.candidates[0].content.parts.length);
+                data.candidates[0].content.parts.forEach((part, idx) => {
+                    console.log(`\n--- Part ${idx} ---`);
+                    console.log('Keys:', Object.keys(part));
+
+                    if (part.inlineData || part.inline_data) {
+                        const inlineData = part.inlineData || part.inline_data;
+                        console.log('✅ HAS INLINE DATA!');
+                        console.log('MIME type:', inlineData.mimeType || inlineData.mime_type);
+                        console.log('Data length:', (inlineData.data || '').length);
+                    }
+
+                    if (part.text) {
+                        console.log('Has text, length:', part.text.length);
+                        console.log('Text preview:', part.text.substring(0, 200));
+                    }
+                });
+            } else {
+                console.log('❌ No content.parts in candidate');
+            }
+        } else {
+            console.log('❌ No candidates in response!');
+            console.log('Response keys:', Object.keys(data));
+            if (data.error) {
+                console.log('Error in response:', data.error);
+            }
+        }
 
         return {
             statusCode: response.status,

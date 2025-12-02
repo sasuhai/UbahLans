@@ -13,8 +13,8 @@ const CONFIG = {
     NETLIFY_FUNCTION_URL: '/.netlify/functions/gemini-proxy',
     GEMINI_API_BASE: 'https://generativelanguage.googleapis.com/v1beta',
     IMAGEN_API_BASE: 'https://generativelanguage.googleapis.com/v1beta',
-    DEFAULT_MODEL: 'gemini-2.0-flash-exp', // Latest available Gemini 2.0 Flash (Confirmed working)
-    IMAGE_MODEL: 'gemini-2.0-flash-exp', // Latest available for image generation (Confirmed working)
+    DEFAULT_MODEL: 'gemini-2.0-flash-exp', // Latest available Gemini 2.0 Flash (Text/Vision)
+    IMAGE_MODEL: 'gemini-2.0-flash-preview-image-generation', // Actual image generation model (10 RPM)
     MODELS: {
         'auto': 'gemini-2.0-flash-exp', // Auto-selects latest available Gemini 2.0 Flash
         'gemini-2.0-flash-exp': 'gemini-2.0-flash-exp', // Gemini 2.0 Flash Experimental (Latest available)
@@ -54,13 +54,11 @@ async function checkAndUpdateLatestModels() {
 
         console.log(`📋 Found ${models.length} total models`);
 
-        // Priority list of actual image generation models (from official docs)
+        // Priority list of actual image generation models (from Google AI Studio)
         const preferredImageModels = [
-            'gemini-3-pro-image-preview',           // Best: Gemini 3 Pro (20 RPM, best reasoning)
-            'imagen-3.0-generate-001',              // Best quality: Imagen 3 (20 RPM)
-            'gemini-2.0-flash-preview-image-generation', // Fastest: Gemini 2.0 Flash (10 RPM)
-            'gemini-2.5-flash-preview-image',       // Alternative
-            'gemini-2.5-flash-image'                // Fallback
+            'gemini-3-pro-image-preview',                    // Best: Gemini 3 Pro (20 RPM, best reasoning)
+            'imagen-3.0-generate-001',                       // Best quality: Imagen 3 (20 RPM)
+            'gemini-2.0-flash-preview-image-generation',     // Fastest: Gemini 2.0 Flash (10 RPM)
         ];
 
         // Find the first available preferred model
@@ -81,6 +79,10 @@ async function checkAndUpdateLatestModels() {
                 (m.name.includes('image') || m.name.includes('imagen')) &&
                 !m.name.includes('vision')
             );
+
+            console.log('📸 All available image generation models:');
+            imageModels.forEach(m => console.log('  -', m.name));
+
             selectedImageModel = imageModels[0];
         }
 
@@ -299,6 +301,38 @@ function closeErrorModal() {
     }
 }
 
+// Success modal function (reuses error modal with different styling)
+function showSuccessModal(title, message) {
+    const modal = document.getElementById('errorModal');
+    const modalTitle = document.getElementById('errorModalTitle');
+    const modalBody = document.getElementById('errorModalBody');
+    const modalIcon = document.querySelector('.error-modal-icon');
+
+    if (modal && modalTitle && modalBody) {
+        modalTitle.textContent = title;
+        modalBody.textContent = message;
+
+        // Change icon to success checkmark
+        if (modalIcon) {
+            modalIcon.textContent = '✅';
+        }
+
+        modal.style.display = 'flex';
+
+        // Prevent body scroll when modal is open
+        document.body.style.overflow = 'hidden';
+
+        // Auto-close after 2 seconds for success messages
+        setTimeout(() => {
+            closeErrorModal();
+            // Restore error icon
+            if (modalIcon) {
+                modalIcon.textContent = '⚠️';
+            }
+        }, 2000);
+    }
+}
+
 // Close modal on Escape key
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
@@ -352,7 +386,7 @@ async function handleFile(file) {
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
+        showErrorModal('No Image Selected', 'Please upload an image file to continue.');
         return;
     }
 
@@ -471,7 +505,7 @@ async function handleFile(file) {
 
     // Validate file size
     if (file.size > 10 * 1024 * 1024) {
-        alert('File size must be less than 10MB');
+        showErrorModal('File Too Large', 'File size must be less than 10MB. Please choose a smaller image.');
         return;
     }
 
@@ -512,7 +546,7 @@ async function handleFile(file) {
                 // Only show error if this is not an intentional image removal
                 if (!state.isRemovingImage) {
                     console.error('Image failed to load:', err);
-                    alert('Failed to load image preview. Please try a different image.');
+                    showErrorModal('Image Load Failed', 'Failed to load image preview. Please try a different image.');
                 }
             };
         } else {
@@ -522,7 +556,7 @@ async function handleFile(file) {
 
     reader.onerror = (err) => {
         console.error('FileReader error:', err);
-        alert('Failed to read file. Please try again.');
+        showErrorModal('File Read Error', 'Failed to read file. Please try again.');
     };
 
     reader.readAsDataURL(file);
@@ -630,7 +664,7 @@ async function generateInfographic() {
         both: 'Label all plants and trees bilingually. Format each label with the English name in regular font on the first line, and the Bahasa Malaysia name in smaller italic font in parentheses on the second line.'
     };
 
-    const prompt = `Generate an image. Transform this garden/landscape photo into a simplified illustrated infographic with plant labels.
+    const prompt = `Transform this garden/landscape photo into a simplified illustrated infographic with plant labels.
 
 ${languageInstructions[language]}
 
@@ -660,7 +694,7 @@ COLOR PALETTE:
 - Trees: Natural browns and muted greens
 - Overall: Calm, natural, professional landscape illustration aesthetic
 
-CRITICAL: You must generate an image. Do not provide a text description. The output must be the transformed image.`;
+The final result should look like a professional landscape plan illustration with a calm, natural color palette and all plants clearly labeled with white boxes and arrows.`;
 
     console.log('📝 Generating illustrated infographic with language:', language);
     console.log('🖼️ Image data length:', state.uploadedImageData?.length);
@@ -740,7 +774,7 @@ async function generateInfographicMode() {
 
     } catch (error) {
         console.error('Infographic generation error:', error);
-        alert(`Failed to generate infographic: ${error.message}`);
+        showErrorModal('Infographic Generation Failed', `Failed to generate infographic:\n\n${error.message}\n\nPlease try again in a few moments.`);
 
         // Reset UI
         elements.loadingSection.style.display = 'none';
@@ -889,14 +923,14 @@ async function generateImageWithGemini(prompt, referenceImageData) {
         // Nano Banana (Gemini 2.5 Flash Image) does image-to-image editing
         // It takes the original image and modifies it based on the prompt
 
-        const editPrompt = `Generate an image. Edit this photo: Keep ALL walls, windows, doors, and building structures EXACTLY as they are. Only modify the landscaping (grass, plants, flowers). ${prompt}. 
+        const editPrompt = `Edit this photo: Keep ALL walls, windows, doors, and building structures EXACTLY as they are. Only modify the landscaping (grass, plants, flowers). ${prompt}. 
         CRITICAL INSTRUCTION: You MUST overlay CLEAR, VISIBLE WHITE CIRCLES with BLACK NUMBERS (1, 2, 3...) on top of the key PLANTS and TREES you add.
         - Focus numbering on the greenery (trees, shrubs, flowers).
         - Only number major hardscape features if they are central to the design.
         - The numbers must be large enough to be read.
         - Place them directly on or next to the new items.
         
-        CRITICAL: You must generate an image. Do not provide a text description. The output must be the transformed image.`;
+        Return the edited image.`;
 
         console.log('Using Nano Banana (Gemini 2.5 Flash Image) for image editing...');
 
@@ -919,36 +953,75 @@ async function generateImageWithGemini(prompt, referenceImageData) {
 
 
 async function callNanoBananaAPI(prompt, imageData) {
-    try {
-        let response;
+    // List of image generation models to try in order
+    // Only including models that are confirmed to exist
+    const imageModels = [
+        CONFIG.IMAGE_MODEL, // Try the configured model first
+        'gemini-3-pro-image-preview', // Confirmed available (may be overloaded)
+    ];
 
-        if (CONFIG.USE_DIRECT_API && CONFIG.GEMINI_API_KEY) {
-            // Local development: Call Google API directly
-            console.log('Calling Google API directly for image generation...');
+    // Remove duplicates
+    const modelsToTry = [...new Set(imageModels)];
 
-            const base64Data = imageData.split(',')[1];
-            const mimeType = imageData.split(',')[0].split(':')[1].split(';')[0];
+    let lastError = null;
 
-            response = await fetch(
-                `${CONFIG.GEMINI_API_BASE}/models/${CONFIG.IMAGE_MODEL}:generateContent`,
-                {
+    for (let i = 0; i < modelsToTry.length; i++) {
+        const modelToUse = modelsToTry[i];
+
+        try {
+            console.log(`🎯 Attempting with model: ${modelToUse} (${i + 1}/${modelsToTry.length})`);
+
+            let response;
+
+            if (CONFIG.USE_DIRECT_API && CONFIG.GEMINI_API_KEY) {
+                // Local development: Call Google API directly
+                console.log('Calling Google API directly for image generation...');
+
+                const base64Data = imageData.split(',')[1];
+                const mimeType = imageData.split(',')[0].split(':')[1].split(';')[0];
+
+                response = await fetch(
+                    `${CONFIG.GEMINI_API_BASE}/models/${modelToUse}:generateContent`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'x-goog-api-key': CONFIG.GEMINI_API_KEY,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [
+                                    { text: prompt },
+                                    {
+                                        inline_data: {
+                                            mime_type: mimeType,
+                                            data: base64Data
+                                        }
+                                    }
+                                ]
+                            }],
+                            generationConfig: {
+                                temperature: 0.4,
+                                topK: 32,
+                                topP: 1,
+                                maxOutputTokens: 4096,
+                            }
+                        })
+                    }
+                );
+            } else {
+                // Production: Use Netlify Function
+                console.log('Calling Netlify Function for image generation...');
+
+                response = await fetch(CONFIG.NETLIFY_FUNCTION_URL, {
                     method: 'POST',
                     headers: {
-                        'x-goog-api-key': CONFIG.GEMINI_API_KEY,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        contents: [{
-                            parts: [
-                                { text: prompt },
-                                {
-                                    inline_data: {
-                                        mime_type: mimeType,
-                                        data: base64Data
-                                    }
-                                }
-                            ]
-                        }],
+                        model: modelToUse,
+                        prompt: prompt,
+                        imageData: imageData,
                         generationConfig: {
                             temperature: 0.4,
                             topK: 32,
@@ -956,91 +1029,137 @@ async function callNanoBananaAPI(prompt, imageData) {
                             maxOutputTokens: 4096,
                         }
                     })
-                }
-            );
-        } else {
-            // Production: Use Netlify Function
-            console.log('Calling Netlify Function for image generation...');
+                });
+            }
 
-            response = await fetch(CONFIG.NETLIFY_FUNCTION_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    model: CONFIG.IMAGE_MODEL,
-                    prompt: prompt,
-                    imageData: imageData,
-                    generationConfig: {
-                        temperature: 0.4,
-                        topK: 32,
-                        topP: 1,
-                        maxOutputTokens: 4096,
+            if (!response.ok) {
+                const error = await response.json();
+                console.error(`Model ${modelToUse} error:`, error);
+
+                // Extract the actual error message
+                let errorMsg = 'Unknown error';
+                if (error.error) {
+                    if (typeof error.error === 'string') {
+                        errorMsg = error.error;
+                    } else if (error.error.message) {
+                        errorMsg = error.error.message;
+                    } else {
+                        errorMsg = JSON.stringify(error.error);
                     }
-                })
-            });
-        }
-
-        if (!response.ok) {
-            const error = await response.json();
-            console.error('Netlify Function error:', error);
-
-            // Extract the actual error message
-            let errorMsg = 'Unknown error';
-            if (error.error) {
-                if (typeof error.error === 'string') {
-                    errorMsg = error.error;
-                } else if (error.error.message) {
-                    errorMsg = error.error.message;
+                } else if (error.details) {
+                    errorMsg = error.details;
+                } else if (error.message) {
+                    errorMsg = error.message;
                 } else {
-                    errorMsg = JSON.stringify(error.error);
+                    errorMsg = 'API request failed';
                 }
-            } else if (error.details) {
-                errorMsg = error.details;
-            } else if (error.message) {
-                errorMsg = error.message;
-            } else {
-                errorMsg = 'API request failed';
+
+                // Check if it's a 503 (overloaded) error - try next model
+                if (response.status === 503 || errorMsg.toLowerCase().includes('overloaded')) {
+                    console.warn(`⚠️ Model ${modelToUse} is overloaded, trying next model...`);
+                    lastError = new Error(errorMsg);
+                    continue; // Try next model
+                }
+
+                // Check if it's a 404 (not found) error - skip to next model
+                if (response.status === 404 || errorMsg.toLowerCase().includes('not found')) {
+                    console.warn(`⚠️ Model ${modelToUse} not found, trying next model...`);
+                    lastError = new Error(errorMsg);
+                    continue; // Try next model
+                }
+
+                // For other errors, throw immediately
+                throw new Error(errorMsg);
             }
 
-            throw new Error(errorMsg);
-        }
-
-        const data = await response.json();
-        console.log('Image generation response received');
-
-        // Extract the edited image from response
-        if (data.candidates && data.candidates[0]) {
-            const candidate = data.candidates[0];
-
-            if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-                console.warn('Generation stopped due to:', candidate.finishReason);
+            const data = await response.json();
+            console.log(`✅ Model ${modelToUse} succeeded!`);
+            console.log('Image generation response received');
+            console.log('Response data structure:', JSON.stringify(data, null, 2).substring(0, 500));
+            console.log('Has candidates?', !!data.candidates);
+            console.log('Candidates length:', data.candidates?.length);
+            if (data.candidates && data.candidates[0]) {
+                console.log('First candidate keys:', Object.keys(data.candidates[0]));
+                console.log('Has content?', !!data.candidates[0].content);
+                console.log('Content keys:', data.candidates[0].content ? Object.keys(data.candidates[0].content) : 'N/A');
+                console.log('Has parts?', !!data.candidates[0].content?.parts);
+                console.log('Parts length:', data.candidates[0].content?.parts?.length);
             }
 
-            if (candidate.content && candidate.content.parts) {
-                for (const part of candidate.content.parts) {
-                    const inlineData = part.inlineData || part.inline_data;
+            // Extract the edited image from response
+            if (data.candidates && data.candidates[0]) {
+                const candidate = data.candidates[0];
 
-                    if (inlineData && inlineData.data) {
-                        const responseMime = inlineData.mimeType || inlineData.mime_type || 'image/png';
-                        return `data:${responseMime};base64,${inlineData.data}`;
+                console.log('🔍 Checking candidate for image data...');
+                console.log('Finish reason:', candidate.finishReason);
+
+                if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+                    console.warn('⚠️ Generation stopped due to:', candidate.finishReason);
+
+                    // Handle specific finish reasons
+                    if (candidate.finishReason === 'SAFETY') {
+                        throw new Error('Image generation blocked by safety filters. Try a different image or prompt.');
+                    } else if (candidate.finishReason === 'RECITATION') {
+                        throw new Error('Image generation blocked due to recitation concerns. Try a different prompt.');
+                    } else if (candidate.finishReason === 'MAX_TOKENS') {
+                        throw new Error('Response exceeded maximum length. Try simplifying your request.');
                     }
+                }
 
-                    if (part.text) {
-                        console.warn('Model returned text instead of image:', part.text);
-                        if (part.text.includes("cannot") || part.text.includes("sorry") || part.text.includes("apologize")) {
-                            throw new Error(`Model refused to edit image: ${part.text}`);
+                if (candidate.content && candidate.content.parts) {
+                    console.log('📦 Parts found:', candidate.content.parts.length);
+
+                    for (let i = 0; i < candidate.content.parts.length; i++) {
+                        const part = candidate.content.parts[i];
+                        console.log(`Part ${i} keys:`, Object.keys(part));
+
+                        const inlineData = part.inlineData || part.inline_data;
+
+                        if (inlineData && inlineData.data) {
+                            const responseMime = inlineData.mimeType || inlineData.mime_type || 'image/png';
+                            console.log('✅ Found image data! MIME type:', responseMime);
+                            return `data:${responseMime};base64,${inlineData.data}`;
+                        }
+
+                        if (part.text) {
+                            console.warn('⚠️ Model returned text instead of image:', part.text.substring(0, 200));
+
+                            // Check if model is explaining why it can't generate
+                            if (part.text.toLowerCase().includes("cannot") ||
+                                part.text.toLowerCase().includes("sorry") ||
+                                part.text.toLowerCase().includes("apologize") ||
+                                part.text.toLowerCase().includes("unable")) {
+                                throw new Error(`Model cannot generate image: ${part.text.substring(0, 300)}`);
+                            }
+
+                            // Model returned text - this means it's analyzing, not editing
+                            console.error('❌ Model is in analysis mode, not image generation mode');
+                            throw new Error(`The model returned a text description instead of an edited image. This usually means the model doesn't support image editing. Response: "${part.text.substring(0, 200)}..."`);
                         }
                     }
                 }
             }
-        }
 
-        throw new Error('No edited image in response (check console for details)');
-    } catch (error) {
-        console.error('Image generation API call failed:', error);
-        throw error;
+            console.error('❌ No image data found in response');
+            console.error('Full response structure:', JSON.stringify(data, null, 2).substring(0, 1000));
+            throw new Error('No edited image in response. The model may not support image editing. Check console for full API response.');
+
+        } catch (error) {
+            console.error(`Image generation with ${modelToUse} failed:`, error);
+            lastError = error;
+
+            // If this is the last model to try, throw the error
+            if (i === modelsToTry.length - 1) {
+                throw error;
+            }
+
+            // Otherwise, try the next model
+            console.log(`Trying next model...`);
+        }
     }
+
+    // If we get here, all models failed
+    throw lastError || new Error('All image generation models failed');
 }
 
 
@@ -1288,7 +1407,7 @@ async function callGeminiAPITextOnly(prompt) {
 // ===================================
 async function autoFillPrompt() {
     if (!state.uploadedImageData) {
-        alert('Please upload an image first');
+        showErrorModal('No Image Uploaded', 'Please upload an image first before using AI suggestions.');
         return;
     }
 
@@ -1309,9 +1428,9 @@ async function autoFillPrompt() {
 
         // Check if it's a quota error
         if (error.message.includes('quota') || error.message.includes('exceeded')) {
-            alert('⚠️ API Quota Exceeded\n\nThe Gemini API has reached its usage limit.\n\nPlease:\n1. Wait a few minutes and try again\n2. Or manually describe your landscape vision in the text box below\n\nYou can still generate transformations by typing your own description!');
+            showErrorModal('API Quota Exceeded', 'The Gemini API has reached its usage limit.\n\nPlease:\n1. Wait a few minutes and try again\n2. Or manually describe your landscape vision in the text box below\n\nYou can still generate transformations by typing your own description!');
         } else {
-            alert('Failed to generate AI suggestions.\n\nPlease manually describe your desired landscape transformation in the text box below.');
+            showErrorModal('AI Suggestions Failed', 'Failed to generate AI suggestions.\n\nPlease manually describe your desired landscape transformation in the text box below.');
         }
     } finally {
         elements.autoFillBtn.disabled = false;
@@ -1324,7 +1443,7 @@ async function autoFillPrompt() {
 // ===================================
 async function generateTransformation() {
     if (!state.uploadedImageData) {
-        alert('Please upload an image first');
+        showErrorModal('No Image Uploaded', 'Please upload an image first before generating transformations.');
         return;
     }
 
@@ -1340,7 +1459,7 @@ async function generateTransformation() {
     // Transform mode (existing functionality)
     const prompt = elements.promptInput.value.trim();
     if (!prompt) {
-        alert('Please describe your desired transformation');
+        showErrorModal('Missing Description', 'Please describe your desired transformation in the text box above.');
         return;
     }
 
@@ -1397,7 +1516,7 @@ async function generateTransformation() {
             errorMessage += error.message;
         }
 
-        alert(errorMessage);
+        showErrorModal('Generation Error', errorMessage);
         elements.loadingSection.style.display = 'none';
         elements.optionsSection.style.display = 'flex';
     }
@@ -1526,7 +1645,7 @@ function downloadResultItem(imageUrl, inventoryText) {
 async function downloadFullReport() {
     const resultsList = document.getElementById('resultsList');
     if (!resultsList || resultsList.children.length === 0) {
-        alert('No designs to download yet.');
+        showErrorModal('No Designs Available', 'No designs to download yet. Please generate a transformation first.');
         return;
     }
 
@@ -1591,7 +1710,7 @@ async function downloadFullReport() {
 
     } catch (error) {
         console.error('Report generation failed:', error);
-        alert('Failed to generate report. Please try again.');
+        showErrorModal('Report Generation Failed', 'Failed to generate report. Please try again.');
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
@@ -1719,7 +1838,7 @@ async function shareResults() {
         // Fallback: copy link
         const url = window.location.href;
         navigator.clipboard.writeText(url).then(() => {
-            alert('Link copied to clipboard!');
+            showSuccessModal('Success', 'Link copied to clipboard!');
         });
     }
 }
