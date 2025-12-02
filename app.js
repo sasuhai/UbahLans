@@ -945,7 +945,8 @@ async function generateImageWithGemini(prompt, referenceImageData) {
         console.log('Falling back to description-based generation...');
         const description = await callGeminiAPI(
             `Describe a landscape transformation: ${prompt}`,
-            referenceImageData
+            referenceImageData,
+            CONFIG.DEFAULT_MODEL
         );
         return await generatePlaceholderImage(800, 600, description);
     }
@@ -1248,7 +1249,7 @@ async function generateTopDownView(transformationDescription, originalImageData)
 4. Pathways, driveways, and hardscaping
 5. Spatial relationships between elements`;
 
-        const layoutAnalysis = await callGeminiAPI(layoutPrompt, originalImageData);
+        const layoutAnalysis = await callGeminiAPI(layoutPrompt, originalImageData, CONFIG.DEFAULT_MODEL);
         console.log('Layout analysis:', layoutAnalysis);
 
         // Step 2: Create prompt for top-down architectural view
@@ -1275,7 +1276,8 @@ Generate a clean, professional top-down architectural plan that shows the proper
         // Fallback to placeholder
         const description = await callGeminiAPI(
             `Describe a top-down view of: ${transformationDescription}`,
-            originalImageData
+            originalImageData,
+            CONFIG.DEFAULT_MODEL
         );
         return await generatePlaceholderImage(800, 800, `Top-down view: ${description}`);
     }
@@ -1421,7 +1423,7 @@ async function autoFillPrompt() {
         
         Do not use bullet points or lists. Just write it as a clear instruction for a designer.`;
 
-        const suggestions = await callGeminiAPI(prompt, state.uploadedImageData);
+        const suggestions = await callGeminiAPI(prompt, state.uploadedImageData, CONFIG.DEFAULT_MODEL);
         elements.promptInput.value = suggestions;
     } catch (error) {
         console.error('Auto-fill error:', error);
