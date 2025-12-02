@@ -20,7 +20,7 @@
 
     <!-- Local Config (for development only) -->
     <script>
-        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:') {
             const script = document.createElement('script');
             script.src = 'config.local.js';
             document.head.appendChild(script);

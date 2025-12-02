@@ -889,14 +889,14 @@ async function generateImageWithGemini(prompt, referenceImageData) {
         // Nano Banana (Gemini 2.5 Flash Image) does image-to-image editing
         // It takes the original image and modifies it based on the prompt
 
-        const editPrompt = `Edit this photo: Keep ALL walls, windows, doors, and building structures EXACTLY as they are. Only modify the landscaping (grass, plants, flowers). ${prompt}. 
+        const editPrompt = `Generate an image. Edit this photo: Keep ALL walls, windows, doors, and building structures EXACTLY as they are. Only modify the landscaping (grass, plants, flowers). ${prompt}. 
         CRITICAL INSTRUCTION: You MUST overlay CLEAR, VISIBLE WHITE CIRCLES with BLACK NUMBERS (1, 2, 3...) on top of the key PLANTS and TREES you add.
         - Focus numbering on the greenery (trees, shrubs, flowers).
         - Only number major hardscape features if they are central to the design.
         - The numbers must be large enough to be read.
         - Place them directly on or next to the new items.
         
-        Return the edited image.`;
+        CRITICAL: You must generate an image. Do not provide a text description. The output must be the transformed image.`;
 
         console.log('Using Nano Banana (Gemini 2.5 Flash Image) for image editing...');
 
