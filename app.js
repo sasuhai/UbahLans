@@ -32,28 +32,55 @@ console.log(USE_LOCAL_CONFIG ? '🔧 Using LOCAL API key for development' : '�
 // AUTO-UPDATE TO LATEST MODELS
 // ===================================
 async function checkAndUpdateLatestModels() {
-    if (!CONFIG.USE_DIRECT_API || !CONFIG.GEMINI_API_KEY) {
-        console.log('⏭️ Skipping model check (using Netlify Functions)');
-        return;
-    }
-
     try {
         console.log('🔍 Checking for latest available models...');
 
-        const response = await fetch(
-            `${CONFIG.GEMINI_API_BASE}/models?key=${CONFIG.GEMINI_API_KEY}`
-        );
+        let models = [];
 
-        if (!response.ok) {
-            console.warn('⚠️ Could not fetch model list, using defaults');
+        if (CONFIG.USE_DIRECT_API && CONFIG.GEMINI_API_KEY) {
+            // Localhost: Call Google API directly
+            const response = await fetch(
+                `${CONFIG.GEMINI_API_BASE}/models?key=${CONFIG.GEMINI_API_KEY}`
+            );
+
+            if (!response.ok) {
+                console.warn('⚠️ Could not fetch model list, using defaults');
+                return;
+            }
+
+            const data = await response.json();
+            models = data.models || [];
+            console.log(`📋 Found ${models.length} total models (direct API)`);
+        } else {
+            // Netlify: Use Netlify Function to get models
+            console.log('🌐 Fetching models via Netlify Function...');
+            const response = await fetch('/.netlify/functions/list-models');
+
+            if (!response.ok) {
+                console.warn('⚠️ Could not fetch model list from Netlify Function, using defaults');
+                return;
+            }
+
+            const data = await response.json();
+
+            if (data.imageModel && data.textModel) {
+                // Netlify Function already selected the best models
+                CONFIG.IMAGE_MODEL = data.imageModel;
+                CONFIG.DEFAULT_MODEL = data.textModel;
+                CONFIG.MODELS['auto'] = data.textModel;
+
+                console.log('✅ Updated IMAGE_MODEL to:', data.imageModel);
+                console.log('✅ Updated DEFAULT_MODEL to:', data.textModel);
+                console.log(`📋 Total models available: ${data.totalModels}`);
+                console.log('🎉 Using latest available models from Netlify!');
+                return; // Done!
+            }
+
+            console.warn('⚠️ Netlify Function did not return models, using defaults');
             return;
         }
 
-        const data = await response.json();
-        const models = data.models || [];
-
-        console.log(`📋 Found ${models.length} total models`);
-
+        // For localhost: Process the models list
         // Priority list of actual image generation models (from Google AI Studio)
         const preferredImageModels = [
             'gemini-3-pro-image-preview',                    // Best: Gemini 3 Pro (20 RPM, best reasoning)
@@ -117,7 +144,8 @@ async function checkAndUpdateLatestModels() {
         console.log('🎉 Using latest available models!');
 
     } catch (error) {
-        console.warn('⚠️ Error checking models, using defaults:', error.message);
+        console.error('Error checking models:', error);
+        console.log('⚠️ Using default models due to error');
     }
 }
 
