@@ -59,8 +59,8 @@ exports.handler = async (event, context) => {
 
         if (imageData && !isImageGenerationModel) {
             console.warn(`⚠️ Model ${model} does NOT support image generation!`);
-            console.warn(`🔄 Switching to: gemini-2.0-flash-preview-image-generation`);
-            model = 'gemini-2.0-flash-preview-image-generation';
+            console.warn(`🔄 Switching to: gemini-3-pro-image-preview`);
+            model = 'gemini-3-pro-image-preview';
         }
 
         console.log('Final model to use:', model);
